@@ -1,1 +1,1 @@
-# synthetic_dl
+# Fishing out TF cooperativity patterns from Deep Learning models
