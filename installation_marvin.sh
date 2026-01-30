@@ -45,7 +45,8 @@ checkPackage torchvision
 checkPackage numpy 
 
 # install various packages
-pip3 install pandas matplotlib pybedtools pybigwig scipy tqdm
+conda install bioconda::bedtools
+pip3 install pandas matplotlib pybedtools pybigwig scipy tqdm, ipython
 checkPackage pandas 
 checkPackage matplotlib 
 checkPackage pybedtools
