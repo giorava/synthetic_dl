@@ -61,7 +61,6 @@ def extend_and_filter_overlaps(peaks: BedTool, chrom_sizes: pd.DataFrame, window
     Raises:
         AssertionError: If chrom_sizes doesn't have exactly 2 columns (chrom id and lenght)
     """
-    print(chrom_sizes.shape[1])
     assert chrom_sizes.shape[1] == 2, "Check that the fist column of chrom sizes are chromosome names"
     chrom_sizes.index = chrom_sizes.iloc[:,0]
 

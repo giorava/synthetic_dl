@@ -6,11 +6,12 @@ import input_utils as data_utils
 
 class test_input_utils(unittest.TestCase):
 
-    def __init__(self, peaks_files, chrom_sizes, ext): 
+    def __init__(self, peaks_files, chrom_sizes, fasta_genome_path, ext): 
         super().__init__
 
         self.peaks = pybedtools.BedTool(peaks_files)
         self.chrom_sizes = pd.read_csv(chrom_sizes, sep = "\t", header = None)
+        self.fasta_genome_path = fasta_genome_path
         self.extend = ext
 
     def assert_equal_bed(self, bed1, bed2): 
@@ -98,14 +99,26 @@ class test_input_utils(unittest.TestCase):
         )
         self.assert_equal_bed(filtered_w3, w3_post)
 
-
-    def check_for_Ns():
-        pass
+    def test_remove_Ns(self): 
+            
+        w1 = pybedtools.BedTool.from_dataframe(pd.DataFrame([
+            ("chr1",   500, 600),
+            ("chr2",  4999995, 5000005),
+        ]))
+        w1_post = pd.DataFrame([
+            ("chr2",  4999995, 5000005),
+        ])
+        filtered_w1 = data_utils.check_for_Ns(
+            peaks=w1, genome_fasta_path=self.fasta_genome_path
+        )
+        pd.testing.assert_frame_equal(filtered_w1, w1_post)
 
 if __name__=="__main__": 
     
     obj = test_input_utils(peaks_files = "../demos/example_datasets/peaks.bed",
                         chrom_sizes = "/homes/users/gravanelli/reference_genomes/mm10.chrom.sizes",
+                        fasta_genome_path = "/homes/users/gravanelli/reference_genomes/mm10.fa",
                         ext = 1000)
     obj.test_find_overlaps()
     obj.test_extend_and_filter_overlaps()
+    obj.test_remove_Ns()
