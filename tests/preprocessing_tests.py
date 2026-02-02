@@ -113,6 +113,9 @@ class test_input_utils(unittest.TestCase):
         )
         pd.testing.assert_frame_equal(filtered_w1, w1_post)
 
+    def test_one_hot_encoding(self): 
+        raise NotImplementedError("to be implemented soon")
+
 if __name__=="__main__": 
     
     obj = test_input_utils(peaks_files = "../demos/example_datasets/peaks.bed",
@@ -122,3 +125,4 @@ if __name__=="__main__":
     obj.test_find_overlaps()
     obj.test_extend_and_filter_overlaps()
     obj.test_remove_Ns()
+    obj.test_one_hot_encoding()

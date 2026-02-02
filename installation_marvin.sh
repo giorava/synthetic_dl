@@ -46,10 +46,11 @@ checkPackage numpy
 
 # install various packages
 conda install bioconda::bedtools
-pip3 install pandas matplotlib pybedtools pybigwig scipy tqdm, ipython
+pip3 install pandas matplotlib pybedtools pybigwig scipy tqdm, ipython, h5py
 checkPackage pandas 
 checkPackage matplotlib 
 checkPackage pybedtools
 checkPackage pyBigWig
 checkPackage scipy
 checkPackage tqdm
+checkPackage h5py
