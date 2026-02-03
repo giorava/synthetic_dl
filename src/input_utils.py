@@ -176,18 +176,18 @@ def one_hot_encoding(peaks: pd.DataFrame, genome_fasta_path: str,  alphabet: str
     """
 
     logging.info(f"Chosen alphabet is: {alphabet}")
+    mapping = dict(zip(alphabet, range(4)))
 
     encodings = []
     w_sizes = []
-    for i, peak in peaks.iterrows(): 
+    for _, peak in peaks.iterrows(): 
         chrom, start, end = peak[0], peak[1], peak[2]
         seq = pybedtools.BedTool.seq((chrom, start, end), genome_fasta_path).upper()
-        mapping = dict(zip("ACGT", range(4)))
         hot_enc = np.zeros((len(seq), 4))
         hot_enc[np.arange(len(seq)), [mapping[i] for i in seq]] = 1
+        encodings.append(hot_enc.T)
         w_sizes.append(end-start)
 
     assert len(np.unique(w_sizes)) == 1, "Bed file window sizes are different"
-
     return np.array(encodings)
 
