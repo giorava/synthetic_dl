@@ -2,15 +2,9 @@ import pandas as pd
 import pybedtools 
 import pyBigWig
 import tqdm
-import logging
 import numpy as np
 from pybedtools import BedTool
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
 
 def filter_overlaps(extended_peaks: pd.DataFrame) -> pd.DataFrame: 
     """
@@ -29,13 +23,13 @@ def filter_overlaps(extended_peaks: pd.DataFrame) -> pd.DataFrame:
     """
     
     overlaps_array = []
-    for i, row in extended_peaks.iterrows(): 
+    for i, row in tqdm.tqdm(extended_peaks.iterrows()): 
         chrom_current, start_current, end_current = row[0], row[1], row[2]
         filtered_removed = extended_peaks.drop(index = i)
         filterd_chrom = filtered_removed[filtered_removed.iloc[:, 0] == chrom_current]
 
-        first_and = (filterd_chrom.iloc[:, 1]>=start_current)&(filterd_chrom.iloc[:, 1]<=end_current)
-        second_and = (filterd_chrom.iloc[:, 2]>=start_current)&(filterd_chrom.iloc[:, 2]<=end_current)
+        first_and = (filterd_chrom.iloc[:, 1]>start_current)&(filterd_chrom.iloc[:, 1]<end_current)
+        second_and = (filterd_chrom.iloc[:, 2]>start_current)&(filterd_chrom.iloc[:, 2]<end_current)
         number_overlaps = np.sum(first_and|second_and)
         overlaps_array.append(number_overlaps.item())
         
@@ -65,7 +59,6 @@ def extend_and_filter_overlaps(peaks: BedTool, chrom_sizes: pd.DataFrame, window
     assert chrom_sizes.shape[1] == 2, "Check that the fist column of chrom sizes are chromosome names"
     chrom_sizes.index = chrom_sizes.iloc[:,0]
 
-    logging.info(f"Extending {peaks.__len__()} peaks")
     extended_peaks = []
     for peak in tqdm.tqdm(peaks):
         chrom, start, end = peak.chrom, peak.start, peak.end
@@ -79,11 +72,8 @@ def extend_and_filter_overlaps(peaks: BedTool, chrom_sizes: pd.DataFrame, window
         else: 
             extended_peaks.append((chrom, lower_bound, upper_bound))
     
-    logging.info(f"Filtering {len(extended_peaks)} peaks for overlaps")
     extended_peaks = pd.DataFrame(extended_peaks)
     filtered = filter_overlaps(extended_peaks)
-    logging.info(f"Number of submitted peaks: {peaks.__len__()}")
-    logging.info(f"Number of non overlapping peaks: {filtered.shape[0]}")
 
     return pybedtools.BedTool.from_dataframe(filtered)
 
@@ -113,9 +103,6 @@ def check_for_Ns(peaks: BedTool, genome_fasta_path: str) -> pd.DataFrame:
             surviving_peaks.append((chrom, start, end))
         else:
             continue
-
-    logging.info(f"Number of submitted peaks: {peaks.__len__()}")
-    logging.info(f"Number of surviving peaks: {len(surviving_peaks)}")
     
     return pd.DataFrame(surviving_peaks)
 
@@ -140,13 +127,11 @@ def get_profiles(peaks: pd.DataFrame, bigwig: pyBigWig.pyBigWig) -> np.ndarray:
         np.ndarray: Array of shape (n_peaks, window_size) with per-base signal
         values for each peak, with NaNs replaced by 0.0.
     """
-
-    logging.info(f"Extracting signal from: {peaks.__len__()}")
     
     signals = []
     w_sizes = []
-    for peak in tqdm.tqdm(peaks): 
-        chrom, start, end = peak.chrom, peak.start, peak.end
+    for i, row in tqdm.tqdm(peaks.iterrows()): 
+        chrom, start, end = row[0], row[1], row[2]
         vals = np.nan_to_num(bigwig.values(chrom, start, end), nan=0.0)
         signals.append(vals)
         w_sizes.append(end-start)
@@ -175,12 +160,11 @@ def one_hot_encoding(peaks: pd.DataFrame, genome_fasta_path: str,  alphabet: str
                     where axis=2 represents A/C/G/T channels.
     """
 
-    logging.info(f"Chosen alphabet is: {alphabet}")
     mapping = dict(zip(alphabet, range(4)))
 
     encodings = []
     w_sizes = []
-    for _, peak in peaks.iterrows(): 
+    for _, peak in tqdm.tqdm(peaks.iterrows()): 
         chrom, start, end = peak[0], peak[1], peak[2]
         seq = pybedtools.BedTool.seq((chrom, start, end), genome_fasta_path).upper()
         hot_enc = np.zeros((len(seq), 4))
