@@ -1,6 +1,7 @@
 import unittest
 import pybedtools, sys
 import pandas as pd
+import numpy as np
 sys.path.insert(0, "../src")
 import input_utils as data_utils
 
@@ -113,6 +114,34 @@ class test_input_utils(unittest.TestCase):
         )
         pd.testing.assert_frame_equal(filtered_w1, w1_post)
 
+    def test_one_hot_encoding(self): 
+
+        w1 = pd.DataFrame([
+            ("chr2",  4999998, 5000003),         # ATGGT
+            ("chr2",  5000000+45, 5000000+50)    # AGAGG
+        ])
+
+        w1_econding = np.array([[[1, 0, 0, 0], 
+          [0, 0, 0, 1], 
+          [0, 0, 1, 0], 
+          [0, 0, 1, 0], 
+          [0, 0, 0, 1]  
+        ],
+        [
+          [1, 0, 0, 0], 
+          [0, 0, 1, 0], 
+          [1, 0, 0, 0], 
+          [0, 0, 1, 0], 
+          [0, 0, 1, 0]  
+        ]], dtype = np.float16)
+
+        w1_econding = w1_econding.transpose(0, 2, 1)  
+        econding = data_utils.one_hot_encoding(
+            peaks=w1, genome_fasta_path=self.fasta_genome_path, alphabet="ACGT"
+        )
+        np.testing.assert_array_equal(econding, w1_econding)
+
+
 if __name__=="__main__": 
     
     obj = test_input_utils(peaks_files = "../demos/example_datasets/peaks.bed",
@@ -122,3 +151,4 @@ if __name__=="__main__":
     obj.test_find_overlaps()
     obj.test_extend_and_filter_overlaps()
     obj.test_remove_Ns()
+    obj.test_one_hot_encoding()

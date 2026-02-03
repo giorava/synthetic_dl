@@ -1,5 +1,6 @@
 import pandas as pd
 import pybedtools 
+import pyBigWig
 import tqdm
 import logging
 import numpy as np
@@ -119,3 +120,74 @@ def check_for_Ns(peaks: BedTool, genome_fasta_path: str) -> pd.DataFrame:
     return pd.DataFrame(surviving_peaks)
 
     
+
+def get_profiles(peaks: pd.DataFrame, bigwig: pyBigWig.pyBigWig) -> np.ndarray: 
+    """
+    Extract per-base signal profiles from a bigWig track for each peak region.
+
+    Iterates over all peaks in the provided BedTool, retrieves the corresponding
+    bigWig signal for each [chrom, start, end] interval, replaces NaNs with 0,
+    and stacks the resulting profiles into a 2D NumPy array. Checks that all
+    peaks have the same window size before returning.
+
+    Args:
+        peaks (BedTool): Genomic intervals (e.g., ChIP-seq peaks) for which
+            signal profiles will be extracted.
+        bigwig (pyBigWig.pyBigWig): Open pyBigWig handle pointing to the
+            bigWig file containing the signal track.
+
+    Returns:
+        np.ndarray: Array of shape (n_peaks, window_size) with per-base signal
+        values for each peak, with NaNs replaced by 0.0.
+    """
+
+    logging.info(f"Extracting signal from: {peaks.__len__()}")
+    
+    signals = []
+    w_sizes = []
+    for peak in tqdm.tqdm(peaks): 
+        chrom, start, end = peak.chrom, peak.start, peak.end
+        vals = np.nan_to_num(bigwig.values(chrom, start, end), nan=0.0)
+        signals.append(vals)
+        w_sizes.append(end-start)
+
+    assert len(np.unique(w_sizes)) == 1, "Bed file window sizes are different"
+    return np.array(signals)
+
+
+def one_hot_encoding(peaks: pd.DataFrame, genome_fasta_path: str,  alphabet: str = "ACGT"):
+    """
+    Convert genomic sequences under peaks to one-hot encoded nucleotide arrays.
+    
+    Extracts DNA sequences for each peak using pybedtools.BedTool.seq(), converts
+    to uppercase, and creates one-hot encoding using the specified alphabet.
+    Assumes A=0, C=1, G=2, T=3 mapping order by default. Validates that all peaks have
+    identical window sizes before returning.
+    
+    Args:
+        peaks (pd.DataFrame): Peak coordinates with columns [chrom, start, end]
+                              (unnamed/indexed by position).
+        genome_fasta_path (str): Path to reference genome FASTA file.
+        alphabet (str): Nucleotide alphabet for encoding. Default: "ACGT".
+    
+    Returns:
+        np.ndarray: One-hot encoded array of shape (n_peaks, window_size, 4)
+                    where axis=2 represents A/C/G/T channels.
+    """
+
+    logging.info(f"Chosen alphabet is: {alphabet}")
+    mapping = dict(zip(alphabet, range(4)))
+
+    encodings = []
+    w_sizes = []
+    for _, peak in peaks.iterrows(): 
+        chrom, start, end = peak[0], peak[1], peak[2]
+        seq = pybedtools.BedTool.seq((chrom, start, end), genome_fasta_path).upper()
+        hot_enc = np.zeros((len(seq), 4))
+        hot_enc[np.arange(len(seq)), [mapping[i] for i in seq]] = 1
+        encodings.append(hot_enc.T)
+        w_sizes.append(end-start)
+
+    assert len(np.unique(w_sizes)) == 1, "Bed file window sizes are different"
+    return np.array(encodings)
+
