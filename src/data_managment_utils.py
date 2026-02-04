@@ -44,12 +44,12 @@ def save_hdf5(X: np.ndarray, y_counts: np.ndarray, filepath: str,
     logging.info(f"Saving {filepath}")
 
     with h5py.File(filepath, "w") as f: 
-        f.create_dataset('data_X', data = torch.tensor(X), dtype = "float64")
+        f.create_dataset('data_X', data = torch.tensor(X), dtype = "float32")
         for i in range(number_tasks):
-            f.create_dataset(f'data_y_counts_task_{i}', data = torch.tensor(y_counts[i, :, :]), dtype = "float64")
+            f.create_dataset(f'data_y_counts_task_{i}', data = torch.tensor(y_counts[i, :, :]), dtype = "float32")
         if not y_prof is None:
             for i in range(number_tasks):
-                f.create_dataset(f'data_y_prof_task_{i}', data = torch.tensor(y_prof[i, :, :]), dtype = "float64")
+                f.create_dataset(f'data_y_prof_task_{i}', data = torch.tensor(y_prof[i, :, :]), dtype = "float32")
 
 
 class BPNetDataset(Dataset): 
@@ -83,10 +83,10 @@ class BPNetDataset(Dataset):
     def __getitem__(self, idx):
 
         output = []
-        output += [torch.tensor(self.hdf5["data_X"][idx])]
+        output += [torch.tensor(self.hdf5["data_X"][idx], dtype = torch.float32)]
         for task in range(self.number_tasks):
-            output += [torch.tensor(self.hdf5[f"data_y_prof_task_{task}"][idx])]
-            output += [torch.tensor(self.hdf5[f"data_y_counts_task_{task}"][idx])]
+            output += [torch.tensor(self.hdf5[f"data_y_prof_task_{task}"][idx], dtype = torch.float32)]
+            output += [torch.tensor(self.hdf5[f"data_y_counts_task_{task}"][idx], dtype = torch.float32)]
 
         return output
 
