@@ -36,7 +36,8 @@ checkPackage() {
 }
 
 # create enviroment with python
-conda create -p $HOME/conda_envs/synth python -y
+conda create -p $HOME/scratch/envs/synth_v2 python -y
+conda activate $HOME/scratch/envs/synth_v2
 
 # install pythorch
 pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu126
@@ -45,8 +46,9 @@ checkPackage torchvision
 checkPackage numpy 
 
 # install various packages
-conda install bioconda::bedtools
-pip3 install pandas matplotlib pybedtools pybigwig scipy tqdm, ipython, h5py
+conda install bioconda::bedtools -y
+conda install jupyter -y
+pip3 install pandas matplotlib pybedtools pybigwig scipy tqdm h5py
 checkPackage pandas 
 checkPackage matplotlib 
 checkPackage pybedtools
