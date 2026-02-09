@@ -108,7 +108,7 @@ def check_for_Ns(peaks: BedTool, genome_fasta_path: str) -> pd.DataFrame:
 
     
 
-def get_profiles(peaks: pd.DataFrame, bigwig: pyBigWig.pyBigWig) -> np.ndarray: 
+def get_profiles(peaks: pd.DataFrame, bigwig: pyBigWig.pyBigWig, chrom_sizes: pd.DataFrame, output_size: int) -> np.ndarray: 
     """
     Extract per-base signal profiles from a bigWig track for each peak region.
 
@@ -127,11 +127,15 @@ def get_profiles(peaks: pd.DataFrame, bigwig: pyBigWig.pyBigWig) -> np.ndarray:
         np.ndarray: Array of shape (n_peaks, window_size) with per-base signal
         values for each peak, with NaNs replaced by 0.0.
     """
-    
+
+
+    peaks = extend_and_filter_overlaps(peaks = pybedtools.BedTool.from_dataframe(peaks),
+                                       chrom_sizes = chrom_sizes, window_size = output_size)
+
     signals = []
     w_sizes = []
-    for i, row in tqdm.tqdm(peaks.iterrows()): 
-        chrom, start, end = row[0], row[1], row[2]
+    for peak in tqdm.tqdm(peaks):
+        chrom, start, end = peak.chrom, peak.start, peak.end 
         vals = np.nan_to_num(bigwig.values(chrom, start, end), nan=0.0)
         signals.append(vals)
         w_sizes.append(end-start)
@@ -175,3 +179,78 @@ def one_hot_encoding(peaks: pd.DataFrame, genome_fasta_path: str,  alphabet: str
     assert len(np.unique(w_sizes)) == 1, "Bed file window sizes are different"
     return np.array(encodings)
 
+def getLengthDifference(numDilLayers: int, initialConvolutionWidths: list[int],
+                        profileKernelSize: int, verbose: bool) -> int:
+    """Determine the padding on each size of the output.
+
+    Given a BPNet architecture, calculate how much longer the input sequence will be than
+    the predicted profile.
+
+    :param numDilLayers: The number of dilated convolutional layers in BPNet.
+    :param initialConvolutionWidths: The widths of the convolutional kernels preceding the
+        dilated convolutions. In the original BPNet, this was a single layer of width
+        25, so this argument would be [25].
+    :param profileKernelSize: The width of the final kernel that generates the profiles,
+        typically around 75.
+    :param verbose: Should the code tell you what it's doing?
+    :return: An integer representing the number of extra bases in the input compared to
+        the length of the predicted profile. Divide by two to get the overhang on each
+        side of the input.
+    """
+    overhang = 0
+    for convWidth in initialConvolutionWidths:
+
+        # First, remove the conv1 layer. The layer width must be odd.
+        assert convWidth % 2 == 1
+        # How many bases to trim? Consider a filter of width 5.
+        #    DATADATADATADATADATA
+        #    12345          12345
+        #    ''PREDICTIONPREDIC''
+        # We remove convWidth // 2 bases on each side, for a total of convWidth-1.
+        overhang += (convWidth - 1)
+        if verbose:
+            print(f"Convolutional layer, width {convWidth}, receptive field {overhang + 1}")
+
+    # Now we iterate through the dilated convolutions. The dilation rate starts at 2, then doubles
+    # at each layer in the network.
+    #     DATADATADATADATADATADATADATA
+    #     C O N                  C O N
+    #     ''INTERMEDIATEINTERMEDIATE''
+    #       C   O   N      C   O   N
+    #       ''''PREDICTIONPREDIC''''
+    # The pattern is that the first layer removes four bases, the next eight bases, and so on.
+    # N
+    # __
+    # \
+    # /_  2^(i+1)  = 2^(i+2)-4
+    # i=1
+    overhang += 2 ** (numDilLayers + 2) - 4
+    if verbose:
+        print(f"After dilated convolutions, receptive field {overhang + 1}")
+    # Now, at the bottom, we have the output filter. It's the same math as the first filter.
+    assert profileKernelSize % 2 == 1
+    overhang += (profileKernelSize - 1)
+    if verbose:
+        print(f"After final convolution, receptive field {overhang + 1}")
+    return overhang
+
+def getInputLength(outPredLen: int, numDilLayers: int, initialConvolutionWidths: list[int],
+                   verbose: bool) -> int:
+    """Given an output length, calculate input length.
+
+    Given a BPNet architecture and a length of the output profile, calculate the length
+    of the input sequence necessary to get that profile..
+
+    :param outPredLen: : The length of the output profile, in bp.
+    :param numDilLayers: : The number of dilated convolutional layers in BPNet.
+    :param initialConvolutionWidths: : The widths of the convolutional kernels preceding
+        the dilated convolutions. In the original BPNet, this was a single layer of
+        width 25, so this argument would be [25].
+    :param profileKernelSize: : The width of the final kernel that generates the profiles,
+        typically around 75.
+    :param verbose: Should the code tell you what it's doing?
+    :return: An integer representing the length of the sequence necessary to calculate the profile.
+    """
+    return outPredLen \
+        + getLengthDifference(numDilLayers, initialConvolutionWidths,
+                              initialConvolutionWidths[0], verbose)

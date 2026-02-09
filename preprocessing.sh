@@ -1,8 +1,8 @@
 #!/bin/bash 
 
 # this numbers should be determined from the choosen arquitecture!
-OUTPUT_SIZE=2000
-INPUT_SIZE=2000
+OUTPUT_SIZE=1000
+INPUT_SIZE=3056
 
 PEAKS_PATH="$HOME/scratch/synthetic_dl/demos/example_datasets/peaks_merged.bed"
 CHROM_SIZES="$HOME/reference_genomes/mm10.chrom.sizes"

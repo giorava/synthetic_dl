@@ -33,19 +33,23 @@ def parse_arguments():
 
     return args
 
-def save_files(peaks, ohe, bigwig_pos, bigwig_neg, output_length, path): 
+def save_files(peaks, ohe, bigwig_pos, bigwig_neg, output_length, path, input_length, chrom_sizes): 
 
-    profile_pos = input_utils.get_profiles(peaks = peaks, bigwig = bigwig_pos)
-    profile_neg = input_utils.get_profiles(peaks = peaks, bigwig = bigwig_neg)
+    profile_pos = input_utils.get_profiles(peaks = peaks, bigwig = bigwig_pos, 
+                                           chrom_sizes=chrom_sizes, output_size=output_length)
+    profile_neg = input_utils.get_profiles(peaks = peaks, bigwig = bigwig_neg,
+                                           chrom_sizes=chrom_sizes, output_size=output_length)
 
     profiles = np.array([profile_pos, profile_neg])
+    print(profiles.shape)
     counts = profiles.sum(2).reshape(2, -1, 1)
 
     data_utils.save_hdf5(X = ohe,
                          y_counts = counts, 
                          filepath = path,
                          number_peaks = peaks.shape[0], 
-                         sequence_length = output_length, 
+                         output_length = output_length, 
+                         input_length = input_length,
                          number_tasks = 2,  
                          y_prof = profiles)
 
@@ -75,6 +79,10 @@ def run():
     test_ohe = input_utils.one_hot_encoding(peaks = test_peaks, genome_fasta_path = args.genome_fasta,  alphabet = "ACGT")
     val_ohe = input_utils.one_hot_encoding(peaks = val_peaks, genome_fasta_path = args.genome_fasta,  alphabet = "ACGT")
 
+    print(train_ohe.shape)
+    print(test_ohe.shape)
+    print(val_ohe.shape)
+
     # train_prof_pos = get_profiles(peaks: pd.DataFrame, bigwig: pyBigWig.pyBigWig)
     # train_prof_neg = 
     bw_pos = pyBigWig.open(args.pos_bigwig)
@@ -83,13 +91,19 @@ def run():
     logging.info(f"Extracting profiles")
     save_files(peaks = train_peaks, ohe = train_ohe, 
                bigwig_pos = bw_pos, bigwig_neg = bw_neg, output_length = args.output_size,
-                path = f"{args.output_path}/train.h5")
+               input_length = args.input_size,
+                path = f"{args.output_path}/train.h5", 
+                chrom_sizes=chrom_sizes)
     save_files(peaks = test_peaks, ohe = test_ohe, 
                bigwig_pos = bw_pos, bigwig_neg = bw_neg, output_length = args.output_size,
-                path = f"{args.output_path}/test.h5")
+               input_length = args.input_size,
+                path = f"{args.output_path}/test.h5", 
+                chrom_sizes=chrom_sizes)
     save_files(peaks = val_peaks, ohe = val_ohe, 
                bigwig_pos = bw_pos, bigwig_neg = bw_neg, output_length = args.output_size,
-                path = f"{args.output_path}/val.h5")
+               input_length = args.input_size,
+                path = f"{args.output_path}/val.h5", 
+                chrom_sizes=chrom_sizes)
 
 if __name__=="__main__": 
 
