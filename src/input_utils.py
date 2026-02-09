@@ -108,7 +108,7 @@ def check_for_Ns(peaks: BedTool, genome_fasta_path: str) -> pd.DataFrame:
 
     
 
-def get_profiles(peaks: pd.DataFrame, bigwig: pyBigWig.pyBigWig) -> np.ndarray: 
+def get_profiles(peaks: pd.DataFrame, bigwig: pyBigWig.pyBigWig, chrom_sizes: pd.DataFrame, output_size: int) -> np.ndarray: 
     """
     Extract per-base signal profiles from a bigWig track for each peak region.
 
@@ -127,11 +127,15 @@ def get_profiles(peaks: pd.DataFrame, bigwig: pyBigWig.pyBigWig) -> np.ndarray:
         np.ndarray: Array of shape (n_peaks, window_size) with per-base signal
         values for each peak, with NaNs replaced by 0.0.
     """
-    
+
+
+    peaks = extend_and_filter_overlaps(peaks = pybedtools.BedTool.from_dataframe(peaks),
+                                       chrom_sizes = chrom_sizes, window_size = output_size)
+
     signals = []
     w_sizes = []
-    for i, row in tqdm.tqdm(peaks.iterrows()): 
-        chrom, start, end = row[0], row[1], row[2]
+    for peak in tqdm.tqdm(peaks):
+        chrom, start, end = peak.chrom, peak.start, peak.end 
         vals = np.nan_to_num(bigwig.values(chrom, start, end), nan=0.0)
         signals.append(vals)
         w_sizes.append(end-start)
@@ -249,4 +253,4 @@ def getInputLength(outPredLen: int, numDilLayers: int, initialConvolutionWidths:
     """
     return outPredLen \
         + getLengthDifference(numDilLayers, initialConvolutionWidths,
-                              initialConvolutionWidths, verbose)
+                              initialConvolutionWidths[0], verbose)

@@ -9,7 +9,7 @@ logging.basicConfig(
 )
 
 def save_hdf5(X: np.ndarray, y_counts: np.ndarray, filepath: str,
-                number_peaks: int, sequence_length: int, number_tasks:int,  y_prof: np.ndarray = None) -> None: 
+                number_peaks: int, input_length:int, output_length: int, number_tasks:int,  y_prof: np.ndarray = None) -> None: 
     """
     Save BPNet-style input and target tensors to an HDF5 file with task-specific datasets.
 
@@ -36,10 +36,10 @@ def save_hdf5(X: np.ndarray, y_counts: np.ndarray, filepath: str,
         - 'data_y_prof_task_{i}': Profile for task i (float64, if y_prof provided)
     """
     
-    assert X.shape == (number_peaks, 4, sequence_length), "Double check X tensor shape, should be SAMPLESx4xSEQ_LENGTH"
+    assert X.shape == (number_peaks, 4, input_length), "Double check X tensor shape, should be SAMPLESx4xSEQ_LENGTH"
     assert y_counts.shape == (number_tasks, number_peaks, 1), "Double check y_counts tensor shape, should be SAMPLESx1"
     if not y_prof is None:
-        assert y_prof.shape == (number_tasks, number_peaks, sequence_length), "Double check y_prof tensor shape, should be SAMPLESxSEQ_LENGTH"
+        assert y_prof.shape == (number_tasks, number_peaks, output_length), "Double check y_prof tensor shape, should be SAMPLESxSEQ_LENGTH"
 
     logging.info(f"Saving {filepath}")
 
