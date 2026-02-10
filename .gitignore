@@ -1,2 +1,5 @@
 demos/example_datasets
 demos/data_dl
+demos/models
+tests/logs
+tests/run_training.sh

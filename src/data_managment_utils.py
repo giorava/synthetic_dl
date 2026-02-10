@@ -74,6 +74,8 @@ class BPNetDataset(Dataset):
         else: 
             self.device = device 
 
+        logging.info(f"dataset on device: {self.device}")
+
         self.hdf5 = h5py.File(input_HDF5, "r")
         self.number_tasks = number_tasks
 
@@ -93,6 +95,6 @@ class BPNetDataset(Dataset):
                          for task in range(self.number_tasks)]
         counts = torch.stack(output_counts, dim=0).squeeze(1)  # [tasks x 1]
     
-        return X, profiles, counts 
+        return X.to(self.device), profiles.to(self.device), counts.to(self.device) 
 
 

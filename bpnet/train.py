@@ -1,42 +1,56 @@
-import numpy as np 
-import sys, unittest, h5py, torch, os
+import logging
+import sys, torch, tqdm
+from datetime import datetime
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 sys.path.insert(0, "../src")
 import data_managment_utils as data_utils
-import input_utils
-
 sys.path.insert(0, "../bpnet")
-import models, losses
-from torch.utils.tensorboard import SummaryWriter
-from datetime import datetime
-import tqdm
-
+import losses
 
 
 class trainBPNet(): 
 
-    def __init__(self): 
+    def __init__(self, model, optimizer, 
+                 path_train_dataset: str, path_val_dataset: str, model_ouput: str, 
+                 fraction_profile: float = 0.1, number_tasks: int = 2,
+                 init_lambda: float = 32.0, batch_size: int = 64): 
 
-        self.optimizer = 1 # adam optimizer
-        self.model = 2 # model definition
-        self.dataloader_train
-        self.dataloader_val
-        self.dataloader_test
-        self.initial_lambda_counts
-        self.output_path
-        self.fraction_profile = 0.1
-        self.loss_obj = losses.BPNetLosses(num_tasks=2)
+        # device
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # load model and optimizer objects
+        self.optimizer = optimizer
+        self.model = model
+
+        # hyperparams
+        self.initial_lambda_counts = init_lambda
+        self.model_ouput = model_ouput
+        self.fraction_profile = fraction_profile
+        self.loss_obj = losses.BPNetLosses(num_tasks=number_tasks)
+
+        ## data loaders: 
+        dataset_train = data_utils.BPNetDataset(input_HDF5=path_train_dataset, number_tasks = number_tasks, device = self.device)
+        dataset_val = data_utils.BPNetDataset(input_HDF5=path_val_dataset, number_tasks = number_tasks, device = self.device)
+        self.dataloader_train = DataLoader(dataset_train, batch_size = batch_size, shuffle = True)
+        self.dataloader_val = DataLoader(dataset_val, batch_size = batch_size, shuffle = False)
 
 
-    def train_one_epoch(self, epoch_index, w_counts): 
+    def train_one_epoch(self, w_counts): 
 
         losses = []
 
-        for i, data  in tqdm.tqdm(enumerate(self.dataloader_train)): 
+        for i, data  in enumerate(self.dataloader_train): 
             input, profiles, counts = data
 
-            self.optimizer.zero_grad()                      # Zero your gradients for every batch!
+            self.optimizer.zero_grad()                      # Zero your gradients for every batch
             profile_pred, counts_pred = self.model(input)   # predict outputs
 
             # compute loss and gradient
@@ -48,14 +62,17 @@ class trainBPNet():
                 count_weights = w_counts
             )
             loss.backward()
-            self.optimizer.step()            # update weights
-            running_loss += [loss.item()]
+            self.optimizer.step()                          # update weights
 
-        return np.mean(losses)
+            average_loss = loss.item()/input.shape[0]
+            losses += [average_loss]
+            print(f">>>> Processed batch {i} with average loss {average_loss} ", flush = True)
+
+        return losses[-1]
     
-    def compute_lambda(self, lambda_e): 
+    def compute_lambda(self, lambda_e):
 
-        p, c, f = self.loss_obj.profile_loss(), self.loss_obj.count_loss(), self.fraction_profile
+        p, c, f = self.loss_obj.get_profile_loss(), self.loss_obj.get_count_loss(), self.fraction_profile
         
         lambda_ep1_prime = (p*f)/(1-f)*c
         lambda_ep1_second = 0.3*lambda_ep1_prime + 0.7*lambda_e
@@ -72,9 +89,7 @@ class trainBPNet():
     def train(self, epochs): 
 
         lambda_counts = self.initial_lambda_counts
-        best_vloss = 1_000_000
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        writer = SummaryWriter('runs/fashion_trainer_{}'.format(timestamp))
         epoch_number = 0
 
         for epoch in range(epochs): 
@@ -82,8 +97,7 @@ class trainBPNet():
             current_lambda = lambda_counts
 
             self.model.train(True)
-            average_loss = self.train_one_epoch(epoch_index = epoch, 
-                                                w_counts = current_lambda)
+            average_loss = self.train_one_epoch(w_counts = current_lambda)
             
             ## computing the validation loss
             validation_loss = []
@@ -99,24 +113,18 @@ class trainBPNet():
                         target_prof = profiles, 
                         count_weights = current_lambda
                     )
-                    validation_loss.append(vlos)
-            average_vlos = np.mean(validation_loss)
+                    validation_loss.append(vlos/input.shape[0])
+
+            average_vlos = validation_loss[-1]  
 
             ### updating the count weight
             lambda_counts = self.compute_lambda(lambda_e = current_lambda)
 
+            logging.info('Epoch {}: Training Loss = {}, Validation Loss = {}, Lambda Counts = {}'.format(epoch_number + 1, average_loss, average_vlos, lambda_counts))
 
-            writer.add_scalars('Training vs. Validation Loss',
-                    { 'Training' : average_loss, 'Validation' : average_vlos},
-                    epoch_number + 1)
-            writer.flush()
+            # save model parameters at each epoch
+            model_path = f'{self.model_ouput}/model_{timestamp}_{epoch_number}'
+            torch.save(self.model.state_dict(), model_path)
 
-            ## track performance and save model
-            if average_vlos < best_vloss:
-                best_vloss = average_vlos
-                model_path = f'{self.output_path}/model_{timestamp}_{epoch_number}'
-                torch.save(self.model.state_dict(), model_path)
-
-
-
+            epoch_number += 1 
 
