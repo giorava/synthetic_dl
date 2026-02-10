@@ -48,7 +48,7 @@ checkPackage numpy
 # install various packages
 conda install bioconda::bedtools -y
 conda install jupyter -y
-pip3 install pandas matplotlib pybedtools pybigwig scipy tqdm h5py
+pip3 install pandas matplotlib pybedtools pybigwig scipy tqdm h5py tensorboard
 checkPackage pandas 
 checkPackage matplotlib 
 checkPackage pybedtools
