@@ -1,5 +1,6 @@
 import logging
-import sys, torch, tqdm
+import sys, torch
+import numpy as np
 from datetime import datetime
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -9,7 +10,7 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
-
+import callbacks
 sys.path.insert(0, "../src")
 import data_managment_utils as data_utils
 sys.path.insert(0, "../bpnet")
@@ -68,22 +69,28 @@ class trainBPNet():
             losses += [average_loss]
             print(f">>>> Processed batch {i} with average loss {average_loss} ", flush = True)
 
-        return losses[-1]
+        return losses[-1], losses
     
-    def compute_lambda(self, lambda_e):
 
-        p, c, f = self.loss_obj.get_profile_loss(), self.loss_obj.get_count_loss(), self.fraction_profile
-        
-        lambda_ep1_prime = (p*f)/(1-f)*c
-        lambda_ep1_second = 0.3*lambda_ep1_prime + 0.7*lambda_e
-        gamma = lambda_ep1_second/lambda_e
+    def validate(self, current_lambda):
 
-        if gamma>2: 
-            return 2*lambda_e
-        if gamma<(1/2): 
-            return lambda_e/2
-        else: 
-            return lambda_ep1_second
+        ## computing the validation loss
+        validation_loss = []
+        self.model.eval()
+        with torch.no_grad(): 
+            for i, vdata in enumerate(self.dataloader_val): 
+                input, profiles, counts = vdata
+                profile_pred, counts_pred = self.model(input)
+                vlos = self.loss_obj(
+                    pred_counts = counts_pred, 
+                    target_counts = counts, 
+                    pred_prof = profile_pred, 
+                    target_prof = profiles, 
+                    count_weights = current_lambda
+                )
+                validation_loss.append(vlos.item()/input.shape[0])
+
+        return validation_loss[-1], validation_loss
 
 
     def train(self, epochs): 
@@ -92,39 +99,45 @@ class trainBPNet():
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         epoch_number = 0
 
-        for epoch in range(epochs): 
+        # scheduler
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, "min")
+        # early stopping
+        early_stopping = callbacks.EarlyStopping(tolerance=15, min_delta=0)
+
+        losses = []
+        vlosses = []
+
+        for _ in range(epochs): 
             print('EPOCH {}:'.format(epoch_number + 1))
             current_lambda = lambda_counts
 
             self.model.train(True)
-            average_loss = self.train_one_epoch(w_counts = current_lambda)
-            
-            ## computing the validation loss
-            validation_loss = []
-            self.model.eval()
-            with torch.no_grad(): 
-                for i, vdata in enumerate(self.dataloader_val): 
-                    input, profiles, counts = vdata
-                    profile_pred, counts_pred = self.model(input)
-                    vlos = self.loss_obj(
-                        pred_counts = counts_pred, 
-                        target_counts = counts, 
-                        pred_prof = profile_pred, 
-                        target_prof = profiles, 
-                        count_weights = current_lambda
-                    )
-                    validation_loss.append(vlos/input.shape[0])
-
-            average_vlos = validation_loss[-1]  
+            average_loss, _losses = self.train_one_epoch(w_counts = current_lambda)
+            average_vlos, _vlosses = self.validate(current_lambda)
+            scheduler.step(average_vlos)
 
             ### updating the count weight
-            lambda_counts = self.compute_lambda(lambda_e = current_lambda)
-
-            logging.info('Epoch {}: Training Loss = {}, Validation Loss = {}, Lambda Counts = {}'.format(epoch_number + 1, average_loss, average_vlos, lambda_counts))
+            #lambda_counts = self.compute_lambda(lambda_e = current_lambda)
+            lambda_counts == callbacks.compute_lambda(
+                p = self.loss_obj.get_profile_loss(),
+                c = self.loss_obj.get_count_loss(), 
+                f = self.fraction_profile, 
+                lambda_e=current_lambda
+            )
 
             # save model parameters at each epoch
+            logging.info('Epoch {}: Training Loss = {}, Validation Loss = {}, Lambda Counts = {}'.format(epoch_number + 1, average_loss, average_vlos, lambda_counts))
             model_path = f'{self.model_ouput}/model_{timestamp}_{epoch_number}'
             torch.save(self.model.state_dict(), model_path)
+            losses.append(_losses)
+            vlosses.append(_vlosses)
 
-            epoch_number += 1 
+            early_stopping.criteria(train_loss=average_loss, validation_loss=average_vlos)
+            if early_stopping.get_early_stop():
+                logging.info(f"Early stopping at epoch: {epoch_number + 1}")
+                break
 
+            epoch_number += 1
+
+        np.savetxt(f'{self.model_ouput}/batch_averaged_training_losses.txt', np.array(losses))
+        np.savetxt(f'{self.model_ouput}/batch_averaged_validation_losses.txt', np.array(vlosses))

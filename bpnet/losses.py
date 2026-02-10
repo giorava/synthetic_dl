@@ -16,8 +16,35 @@ class BPNetLosses(nn.Module):
 
     def get_count_loss(self): 
         return self.count_loss
+    
+    def log_mse(self, target_counts, pred_counts):
+        """
+        Compute Mean Squared Error (MSE) on log-scale counts.
+        
+        This loss function compares log-transformed counts between target and prediction,
+        which provides numerical stability for very large or very small count values.
+        This is the BPreveal approach.
+        
+        Args:
+            target_counts (torch.Tensor): Target count tensor of shape [batch_size, num_categories]
+            pred_counts (torch.Tensor): Predicted count tensor of shape [batch_size, num_categories]
+            epsilon (float): Small value to prevent log(0), default 1e-8
+            
+        Returns:
+            torch.Tensor: Scalar MSE loss between log-transformed counts
+        """
 
-    def MSE(self, target_counts, pred_counts):
+        tot_target_counts = torch.sum(target_counts, 1)
+        tot_pred_counts = torch.sum(pred_counts, 1)
+        
+        log_target = torch.log(tot_target_counts + 1e-8)
+        log_pred = torch.log(tot_pred_counts + 1e-8)
+        log_mse = torch.mean((log_target - log_pred)**2)
+
+        return log_mse
+
+
+    def mse(self, target_counts, pred_counts):
         """
         Compute Mean Squared Error (MSE) between total counts of target and predicted distributions.
         
@@ -73,7 +100,7 @@ class BPNetLosses(nn.Module):
         return batch_multinomial_nll/batch_size
         
         
-    def forward(self, pred_counts, target_counts, pred_prof, target_prof, count_weights):
+    def forward(self, pred_counts, target_counts, pred_prof, target_prof, count_weights, use_log_mse=True):
         """
         Combined loss computation for count matching and profile distribution modeling.
         
@@ -91,10 +118,16 @@ class BPNetLosses(nn.Module):
             torch.Tensor: Combined scalar loss = profile_nll + count_weights * count_mse
         """
 
-        counts_raw_loss = self.MSE(
-            target_counts = target_counts, 
-            pred_counts = pred_counts
-        )
+        if use_log_mse: 
+            counts_raw_loss = self.log_mse(
+                target_counts = target_counts, 
+                pred_counts = pred_counts
+            )
+        else:
+            counts_raw_loss = self.mse(
+                target_counts = target_counts, 
+                pred_counts = pred_counts
+            )
 
         prof_raw_loss = self.multinomial_nll(
             target_profile = target_prof,
