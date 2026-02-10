@@ -3,3 +3,7 @@ demos/data_dl
 demos/models
 tests/logs
 tests/run_training.sh
+src/__pycache__
+bpnet/__pycache__
+bpnet/.ipynb_checkpoints
+src/.ipynb_checkpoints
