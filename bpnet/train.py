@@ -43,6 +43,8 @@ class trainBPNet():
         self.dataloader_train = DataLoader(dataset_train, batch_size = batch_size, shuffle = True)
         self.dataloader_val = DataLoader(dataset_val, batch_size = batch_size, shuffle = False)
 
+        self.batch_size = batch_size
+
 
     def train_one_epoch(self, w_counts): 
 
@@ -69,7 +71,9 @@ class trainBPNet():
             losses += [average_loss]
             print(f">>>> Processed batch {i} with average loss {average_loss} ", flush = True)
 
-        return losses[-1], losses
+        ## smoothing the loss by the last batches 
+        last_losses = np.array(losses)[-int(np.ceil(0.1*self.batch_size)):]
+        return np.median(last_losses), losses
     
 
     def validate(self, current_lambda):
@@ -90,8 +94,9 @@ class trainBPNet():
                 )
                 validation_loss.append(vlos.item()/input.shape[0])
 
-        return validation_loss[-1], validation_loss
-
+        ## smoothing the loss by the last batches
+        last_vlosses = np.array(validation_loss)[-int(np.ceil(0.1*self.batch_size)):]
+        return np.median(last_vlosses), validation_loss
 
     def train(self, epochs): 
 
