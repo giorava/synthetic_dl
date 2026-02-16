@@ -22,7 +22,7 @@ class trainBPNet():
     def __init__(self, model, optimizer, 
                  path_train_dataset: str, path_val_dataset: str, model_ouput: str, 
                  fraction_profile: float = 0.1, number_tasks: int = 2,
-                 init_lambda: float = 32.0, batch_size: int = 64): 
+                 init_lambda: float = 32.0, batch_size: int = 64, early_stop_patience = 15): 
 
         # device
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -36,6 +36,7 @@ class trainBPNet():
         self.model_ouput = model_ouput
         self.fraction_profile = fraction_profile
         self.loss_obj = losses.BPNetLosses(num_tasks=number_tasks)
+        self.early_stop_patience = early_stop_patience
 
         ## data loaders: 
         dataset_train = data_utils.BPNetDataset(input_HDF5=path_train_dataset, number_tasks = number_tasks, device = self.device)
@@ -105,9 +106,9 @@ class trainBPNet():
         epoch_number = 0
 
         # scheduler
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, "min")
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, "min", factor = 0.5, patience = 5)
         # early stopping
-        early_stopping = callbacks.EarlyStopping(tolerance=15, min_delta=0)
+        early_stopping = callbacks.EarlyStopping(tolerance=self.early_stop_patience, min_delta=0)
 
         losses = []
         vlosses = []
