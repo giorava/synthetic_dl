@@ -86,6 +86,8 @@ class BPNetLosses(nn.Module):
         flatCounts = torch.sum(flatTask, 1)
         
         flatLogits = torch.flatten(pred_logits, 1)
+
+        assert torch.isfinite(flatLogits).all().item(), print(flatLogits)
         
         batch_multinomial_nll = 0
         for i in range(batch_size): 
