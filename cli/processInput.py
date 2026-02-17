@@ -42,10 +42,10 @@ def save_files(peaks, ohe, bigwig_pos, bigwig_neg, output_length, path, input_le
 
     profiles = np.array([profile_pos, profile_neg])
     print(profiles.shape)
-    counts = profiles.sum(2).reshape(2, -1, 1)
+    log10counts = np.log10(profile_pos.sum(1) + profile_neg.sum(1))
 
     data_utils.save_hdf5(X = ohe,
-                         y_counts = counts, 
+                         y_counts = log10counts, 
                          filepath = path,
                          number_peaks = peaks.shape[0], 
                          output_length = output_length, 

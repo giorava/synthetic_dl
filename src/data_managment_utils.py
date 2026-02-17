@@ -36,17 +36,16 @@ def save_hdf5(X: np.ndarray, y_counts: np.ndarray, filepath: str,
         - 'data_y_prof_task_{i}': Profile for task i (float64, if y_prof provided)
     """
     
-    assert X.shape == (number_peaks, 4, input_length), "Double check X tensor shape, should be SAMPLESx4xSEQ_LENGTH"
-    assert y_counts.shape == (number_tasks, number_peaks, 1), "Double check y_counts tensor shape, should be SAMPLESx1"
+    assert X.shape == (number_peaks, 4, input_length), f"Double check X tensor shape, should be SAMPLESx4xSEQ_LENGTH, got {X.shape}"
+    assert y_counts.shape == (number_peaks,), f"Double check y_counts tensor shape, should be SAMPLESx1, got {y_counts.shape}"
     if not y_prof is None:
-        assert y_prof.shape == (number_tasks, number_peaks, output_length), "Double check y_prof tensor shape, should be SAMPLESxSEQ_LENGTH"
+        assert y_prof.shape == (number_tasks, number_peaks, output_length), f"Double check y_prof tensor shape, should be SAMPLESxSEQ_LENGTH, got {y_prof.shape}"
 
     logging.info(f"Saving {filepath}")
 
     with h5py.File(filepath, "w") as f: 
         f.create_dataset('data_X', data = torch.tensor(X), dtype = "float32")
-        for i in range(number_tasks):
-            f.create_dataset(f'data_y_counts_task_{i}', data = torch.tensor(y_counts[i, :, :]), dtype = "float32")
+        f.create_dataset(f'data_y_counts', data = torch.tensor(y_counts), dtype = "float32")
         if not y_prof is None:
             for i in range(number_tasks):
                 f.create_dataset(f'data_y_prof_task_{i}', data = torch.tensor(y_prof[i, :, :]), dtype = "float32")
@@ -91,9 +90,10 @@ class BPNetDataset(Dataset):
                           for task in range(self.number_tasks)]
         profiles = torch.stack(output_profile, dim=0)  # [tasks x length]
         
-        output_counts = [torch.tensor(self.hdf5[f"data_y_counts_task_{task}"][idx], dtype=torch.float32) 
-                         for task in range(self.number_tasks)]
-        counts = torch.stack(output_counts, dim=0).squeeze(1)  # [tasks x 1]
+        # output_counts = [torch.tensor(self.hdf5[f"data_y_counts_task_{task}"][idx], dtype=torch.float32) 
+        #                  for task in range(self.number_tasks)]
+        # counts = torch.stack(output_counts, dim=0).squeeze(1)  # [tasks x 1]
+        counts = torch.tensor(self.hdf5["data_y_counts"][idx], dtype=torch.float32).unsqueeze(0)  # [1 x 1]
     
         return X.to(self.device), profiles.to(self.device), counts.to(self.device) 
 
