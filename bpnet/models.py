@@ -55,7 +55,7 @@ class BPNetSingleHeadProfile(nn.Module):
 
         self.last_conv = nn.Conv1d(numFilters, number_tasks, kernel_size = widthFilters, padding = 0)
         self.adaptive_pool = nn.AdaptiveAvgPool1d(1)
-        self.fc = nn.Linear(numFilters, number_tasks)
+        self.fc = nn.Linear(numFilters, 1)
 
     def forward(self, x): 
         out = self.relu(self.initial_conv(x))
@@ -63,8 +63,15 @@ class BPNetSingleHeadProfile(nn.Module):
         # binding core model
         for i, conv in enumerate(self.dilated_convs):
             new_out = self.relu(conv(out))
-            crop_of = (out.shape[-1] - new_out.shape[-1]) // 2
-            previous_output = out[:, :, crop_of:-crop_of]
+            # Handle size mismatch
+            if out.shape[-1] != new_out.shape[-1]:
+                # Center-crop 'out' to match new_out
+                diff = out.shape[-1] - new_out.shape[-1]
+                start = diff // 2
+                end = start + new_out.shape[-1]
+                previous_output = out[:, :, start:end]
+            else:
+                previous_output = out
             out = previous_output + new_out
 
         # specific profile heads

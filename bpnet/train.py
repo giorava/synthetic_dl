@@ -70,7 +70,7 @@ class trainBPNet():
 
             average_loss = loss.item()/input.shape[0]
             losses += [average_loss]
-            print(f">>>> Processed batch {i} with average loss {average_loss} ", flush = True)
+            print(f">>>> Processed batch {i} with shape {input.shape} and average loss {average_loss} ", flush = True)
 
         ## smoothing the loss by the last batches 
         last_losses = np.array(losses)[-int(np.ceil(0.1*self.batch_size)):]
@@ -114,7 +114,7 @@ class trainBPNet():
         vlosses = []
 
         for _ in range(epochs): 
-            print('EPOCH {}:'.format(epoch_number + 1))
+            print("\n"+'EPOCH {}:'.format(epoch_number + 1))
             current_lambda = lambda_counts
 
             self.model.train(True)
@@ -132,7 +132,8 @@ class trainBPNet():
             )
 
             # save model parameters at each epoch
-            logging.info('Epoch {}: Training Loss = {}, Validation Loss = {}, Lambda Counts = {}'.format(epoch_number + 1, average_loss, average_vlos, lambda_counts))
+            logging.info('Epoch {}: Training Loss = {}, Validation Loss = {}'.format(epoch_number + 1, average_loss, average_vlos))
+            logging.info('Raw log counts loss = {}, Profile NLL loss = {}, lambda_counts = {}'.format(self.loss_obj.get_count_loss(), self.loss_obj.get_profile_loss(), lambda_counts))
             model_path = f'{self.model_ouput}/model_{timestamp}_{epoch_number}'
             torch.save(self.model.state_dict(), model_path)
             losses.append(_losses)

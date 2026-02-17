@@ -43,8 +43,18 @@ class predictBPNet():
         output_path = self.output_path+"/"+fname
         logging.info(f"Saving {output_path}")
         with h5py.File(output_path, "w") as f:
-            f.create_dataset("profiles", data = predictions[0])
-            f.create_dataset("counts", data = predictions[1])
+            f.create_dataset("profiles_logits", data = predictions[0].cpu().numpy())
+            f.create_dataset("log10_counts", data = predictions[1].cpu().numpy())
+            f.create_dataset("distributed_profiles_counts", data = predictions[2].cpu().numpy())
+
+    def distribute_reads(self, profile_logits, log10_counts):
+
+        total_counts = 10**log10_counts  # Convert log10 counts back to raw counts
+        flatlogits = torch.flatten(profile_logits, 1)
+        profile_probs = torch.softmax(flatlogits, dim=-1)  # Convert logits to probabilities
+        distributed_counts = profile_probs * total_counts
+        distributed_counts = distributed_counts.reshape(profile_logits.shape)  # Reshape back to original profile shape
+        return distributed_counts 
 
     def evaluate_set(self, data_loader):
         self.model.eval()
@@ -53,15 +63,21 @@ class predictBPNet():
             for i, data in tqdm.tqdm(enumerate(data_loader)): 
 
                 profile_pred, counts_pred = self.model(data[0])
+                distributed_counts = self.distribute_reads(profile_pred, counts_pred)
 
                 if i == 0: 
                     profile_preds = profile_pred
                     counts_preds = counts_pred
+                    distributed_counts_preds = distributed_counts
                 else: 
-                    torch.cat([profile_preds, profile_pred], 0)
-                    torch.cat([counts_preds, counts_pred], 0)
+                    distributed_counts_preds = torch.cat([distributed_counts_preds, distributed_counts], 0)
+                    profile_preds = torch.cat([profile_preds, profile_pred], 0)
+                    counts_preds = torch.cat([counts_preds, counts_pred], 0)
 
-        return profile_preds.cpu().numpy(), counts_preds.cpu().numpy()
+        print(f"Profile predictions shape: {profile_preds.shape}")
+        print(f"Counts predictions shape: {counts_preds.shape}")
+        print(f"Distributed counts predictions shape: {distributed_counts_preds.shape}")
+        return profile_preds, counts_preds, distributed_counts_preds
     
     def run_all_sets(self): 
 
